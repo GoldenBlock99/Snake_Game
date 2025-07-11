@@ -23,6 +23,11 @@ food.center = get_random_position()
 #speed control
 time, time_step = 0, 110
 
+#score initialize
+score = 0
+pg.display.set_caption("Snake by Maymun Rahman     SCORE: " + str(score) )
+
+
 #initial snake settings
 length = 1
 segments = [snake.copy()]
@@ -49,7 +54,7 @@ def crash():
     
 #main game loop
 while True:
-    
+    pg.display.set_caption("Snake by Maymun Rahman     SCORE: " + str(score) )
     for event in pg.event.get():
         if event.type == pg.QUIT:
             exit()
@@ -71,6 +76,7 @@ while True:
     self_eating = pg.Rect.collidelist(snake, segments[:-1]) != -1
     if snake.left < 0 or snake.right > WINDOW or snake.top < 0 or snake.bottom > WINDOW or self_eating:
         crash()
+        score = 0
         pg.time.wait(1000)
         pg.mixer.Sound.play(game_start_sound)
         pg.time.wait(500)
@@ -86,6 +92,7 @@ while True:
         pg.mixer.Sound.play(food_eat_sound)
         food.center = get_random_position()
         length +=1
+        score += 1
 
     #draw snake
     [pg.draw.rect(screen, 'green', segment) for segment in segments]
