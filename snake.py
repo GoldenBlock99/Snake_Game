@@ -1,109 +1,165 @@
-import pygame as pg
-from random import randrange
+import time
+import pygame, sys, random, asyncio
+from pygame.math import Vector2
 
-#Setting Window Params
-WINDOW = 1000
-TILE_SIZE = 50
-RANGE = (TILE_SIZE // 2, WINDOW - TILE_SIZE//2, TILE_SIZE)
-screen = pg.display.set_mode([WINDOW] * 2)
+pygame.init()
 
-#random position function
-get_random_position = lambda: [randrange(*RANGE), randrange(*RANGE)]
+title_font = pygame.font.Font(None, 60)
+score_font = pygame.font.Font(None, 40)
 
-#setting up pygame clock
-clock = pg.time.Clock()
+GREEN = (173, 204, 96)
+DARK_GREEN = (43, 51, 24)
 
-#setting up snake and food
-snake = pg.rect.Rect([0,0, TILE_SIZE - 2, TILE_SIZE -2 ])
-snake.center = get_random_position()
-snake_dir = (0,0)
-food = snake.copy()
-food.center = get_random_position() 
+cell_size = 30
+number_of_cells = 25
 
-#speed control
-time, time_step = 0, 110
+OFFSET = 75
 
-#score initialize
-score = 0
-pg.display.set_caption("Snake by Maymun Rahman     SCORE: " + str(score) )
+class Food:
+	def __init__(self, snake_body):
+		self.position = self.generate_random_pos(snake_body)
+
+	def draw(self):
+		food_rect = pygame.Rect(OFFSET + self.position.x * cell_size, OFFSET + self.position.y * cell_size, 
+			cell_size, cell_size)
+		screen.blit(food_surface, food_rect)
+
+	def generate_random_cell(self):
+		x = random.randint(0, number_of_cells-1)
+		y = random.randint(0, number_of_cells-1)
+		return Vector2(x, y)
+
+	def generate_random_pos(self, snake_body):
+		position = self.generate_random_cell()
+		while position in snake_body:
+			position = self.generate_random_cell()
+		return position
+
+class Snake:
+	def __init__(self):
+		self.body = [Vector2(6, 9), Vector2(5,9), Vector2(4,9)]
+		self.direction = Vector2(1, 0)
+		self.add_segment = False
+		self.eat_sound = pygame.mixer.Sound("Sounds/eat.ogg")
+		self.wall_hit_sound = pygame.mixer.Sound("Sounds/wall.ogg")
+		self.music_sounds = pygame.mixer.Sound("Sounds/game_theme.ogg")
+		self.game_start_sound = pygame.mixer.Sound("Sounds/game_start.ogg")
+
+	def draw(self):
+		for segment in self.body:
+			segment_rect = (OFFSET + segment.x * cell_size, OFFSET+ segment.y * cell_size, cell_size, cell_size)
+			pygame.draw.rect(screen, DARK_GREEN, segment_rect, 0, 7)
+
+	def update(self):
+		self.body.insert(0, self.body[0] + self.direction)
+		if self.add_segment == True:
+			self.add_segment = False
+		else:
+			self.body = self.body[:-1]
+
+	def reset(self):
+		self.body = [Vector2(6,9), Vector2(5,9), Vector2(4,9)]
+		self.direction = Vector2(1, 0)
+
+class Game:
+	def __init__(self):
+		self.snake = Snake()
+		self.snake.game_start_sound.play()
+		pygame.time.wait(1000)
+		self.snake.music_sounds.play(-1)
+		self.food = Food(self.snake.body)
+		self.state = "RUNNING"
+		self.score = 0
+
+	def draw(self):
+		self.food.draw()
+		self.snake.draw()
+
+	def update(self):
+		if self.state == "RUNNING":
+			self.snake.update()
+			self.check_collision_with_food()
+			self.check_collision_with_edges()
+			self.check_collision_with_tail()
+
+	def check_collision_with_food(self):
+		if self.snake.body[0] == self.food.position:
+			self.food.position = self.food.generate_random_pos(self.snake.body)
+			self.snake.add_segment = True
+			self.score += 1
+			self.snake.eat_sound.play()
+
+	def check_collision_with_edges(self):
+		if self.snake.body[0].x == number_of_cells or self.snake.body[0].x == -1:
+			self.game_over()
+		if self.snake.body[0].y == number_of_cells or self.snake.body[0].y == -1:
+			self.game_over()
+
+	def game_over(self):
+		self.snake.reset()
+		self.food.position = self.food.generate_random_pos(self.snake.body)
+		self.state = "STOPPED"
+		self.score = 0
+		self.snake.wall_hit_sound.play()
+		pygame.mixer.stop()
+		self.snake.game_start_sound.play()
+
+		self.snake.music_sounds.play(-1)
+		
+		
+		
+
+	def check_collision_with_tail(self):
+		headless_body = self.snake.body[1:]
+		if self.snake.body[0] in headless_body:
+			self.game_over()
+
+screen = pygame.display.set_mode((2*OFFSET + cell_size*number_of_cells, 2*OFFSET + cell_size*number_of_cells))
+
+pygame.display.set_caption("Maymun Rahman's Snake V2")
+
+clock = pygame.time.Clock()
+
+game = Game()
+food_surface = pygame.image.load("Graphics/food.png")
+
+SNAKE_UPDATE = pygame.USEREVENT
+pygame.time.set_timer(SNAKE_UPDATE, 200) 	
 
 
-#initial snake settings
-length = 1
-segments = [snake.copy()]
+async def main():
+    while True:
+        for event in pygame.event.get():
+            if event.type == SNAKE_UPDATE:
+                game.update()
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
 
-#music/sfx
-pg.mixer.init()
-pg.mixer.music.load("game_theme.mp3")
-crash_sound = pg.mixer.Sound("crash.mp3")
-crash_sound.set_volume(0.5)
-game_start_sound = pg.mixer.Sound("game_start.mp3")
-food_eat_sound = pg.mixer.Sound("food_eat.mp3")
-pg.mixer.Sound.play(game_start_sound)
-pg.mixer.music.play(-1)
+            if event.type == pygame.KEYDOWN:
+                if game.state == "STOPPED":
+                    game.state = "RUNNING"
+                if event.key == pygame.K_UP and game.snake.direction != Vector2(0, 1):
+                    game.snake.direction = Vector2(0, -1)
+                if event.key == pygame.K_DOWN and game.snake.direction != Vector2(0, -1):
+                    game.snake.direction = Vector2(0, 1)
+                if event.key == pygame.K_LEFT and game.snake.direction != Vector2(1, 0):
+                    game.snake.direction = Vector2(-1, 0)
+                if event.key == pygame.K_RIGHT and game.snake.direction != Vector2(-1, 0):
+                    game.snake.direction = Vector2(1, 0)
 
-#direction dictionary; makes sure the snake can't move into itself
-dirs = {pg.K_w: 1, pg.K_s:1, pg.K_a: 1, pg.K_d: 1}
+        #Drawing
+        screen.fill(GREEN)
+        pygame.draw.rect(screen, DARK_GREEN, 
+            (OFFSET-5, OFFSET-5, cell_size*number_of_cells+10, cell_size*number_of_cells+10), 5)
+        game.draw()
+        title_surface = title_font.render("Snake V2", True, DARK_GREEN)
+        score_surface = score_font.render("SCORE: "+str(game.score), True, DARK_GREEN)
+        screen.blit(title_surface, (OFFSET-5, 20))
+        screen.blit(score_surface, (OFFSET-5, OFFSET + cell_size*number_of_cells +10))
 
-#crashing
-def crash():
-    pg.mixer.music.stop()
-    pg.mixer.Sound.play(crash_sound)
-    pg.mixer.music.stop()
-
-    
-#main game loop
-while True:
-    pg.display.set_caption("Snake by Maymun Rahman     SCORE: " + str(score) )
-    for event in pg.event.get():
-        if event.type == pg.QUIT:
-            exit()
-        if event.type == pg.KEYDOWN:
-            if event.key == pg.K_w and dirs[pg.K_w]:
-                snake_dir = (0, -TILE_SIZE)
-                dirs = {pg.K_w: 1, pg.K_s:0, pg.K_a: 1, pg.K_d: 1}
-            if event.key == pg.K_s and dirs[pg.K_s] :
-                snake_dir = (0, TILE_SIZE)
-                dirs = {pg.K_w: 0, pg.K_s:1, pg.K_a: 1, pg.K_d: 1}
-            if event.key == pg.K_a and dirs[pg.K_a]:
-                snake_dir = (-TILE_SIZE,0)
-                dirs = {pg.K_w: 1, pg.K_s:1, pg.K_a: 1, pg.K_d: 0}
-            if event.key == pg.K_d and dirs[pg.K_d]:
-                snake_dir = (TILE_SIZE, 0)
-                dirs = {pg.K_w: 1, pg.K_s:1, pg.K_a: 0, pg.K_d: 1}
-    screen.fill('black')
-    #check boundaries and self eating
-    self_eating = pg.Rect.collidelist(snake, segments[:-1]) != -1
-    if snake.left < 0 or snake.right > WINDOW or snake.top < 0 or snake.bottom > WINDOW or self_eating:
-        crash()
-        score = 0
-        pg.time.wait(1000)
-        pg.mixer.Sound.play(game_start_sound)
-        pg.time.wait(500)
-        pg.mixer.music.play(-1) 
-       
-        snake.center, food.center = get_random_position(), get_random_position()
-        length, snake_dir = 1, (0,0)
-        segments = [snake.copy()]
-        
-
-    #check food
-    if snake.center == food.center:
-        pg.mixer.Sound.play(food_eat_sound)
-        food.center = get_random_position()
-        length +=1
-        score += 1
-
-    #draw snake
-    [pg.draw.rect(screen, 'green', segment) for segment in segments]
-    #draw food
-    pg.draw.rect(screen, 'red', food)
-    #move snake
-    time_now = pg.time.get_ticks()
-    if time_now -   time > time_step:
-        time = time_now
-        snake.move_ip(snake_dir)
-        segments.append(snake.copy())
-        segments = segments[-length:]
-    pg.display.flip()
-    clock.tick(60)
+        pygame.display.update()
+        clock.tick(60)
+        await asyncio.sleep(0)
+		
+asyncio.run(main())
