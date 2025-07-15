@@ -1,3 +1,6 @@
+#SNAKE V2 BY MAYMUN A. RAHMAN
+#LAST BUILD - 15 JULY 2025
+
 import time
 import pygame, sys, random, asyncio
 from pygame.math import Vector2
