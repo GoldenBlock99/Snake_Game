@@ -1,2 +1,3 @@
 The game needs to be ran in the latest version of Python and Pygame
-Download the entire folder, the .exe WILL NOT RUN if it is not in the same folder as the resources
+Download the entire folder
+also available on itch.io: https://thegoldenblock.itch.io/snake-v2
